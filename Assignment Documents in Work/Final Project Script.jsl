@@ -1,0 +1,179 @@
+//Import fuctions to allows for quick ingestion and changes to the data.  
+//Remember to provided the path to cali1.xlsx on the local machine.
+
+dt = Open("D:\OneDrive\Documents\Villanova - Masters of Science in Analytics\Fall 2017\MSA 8220 Analytical Meth for Data Mng\Submitted Work\Final Project\cali1.xlsx");
+
+//Converts Lot column enumeration from numeric to character value
+dt << New Column("Lot Enumeration", Character, Formula(
+	IF(:Lot == 1, "< 1 acre",
+		:Lot == 2, "1 to 10 acres",
+		:Lot == 3, "> 10 acres"
+	)
+));
+
+//Converts Units column enumeration from numeric to character value
+dt << New Column("Units Enumeration", Character, Formula(
+	IF(:Units == 1, "mobile home",
+		:Units == 2, "one family house detached",
+		:Units == 3, "one family house attached",
+		:Units == 4, "two apartments",
+		:Units == 5, "3 to 4 apartments",
+		:Units == 6, "5 to 9 apartments",
+		:Units == 7, "10 to 19 apartments",
+		:Units == 8, "20 to 49 apartments",
+		:Units == 9, "50+ apartments",
+		:Units == 10, "boat or RV",
+		Is Missing(:Units), "N/A"
+	)
+));
+
+//Converts Electric column into two columns, one for a character enumeration discribing how bill is paid and a
+//second column with the payment value per month.  The value is zero if included in HOA/condo fees
+dt << New Column("Electric Enumeration", Character, Formula(
+	IF(
+		:Electric == 1, "included in condo/HOA fee",
+		:Electric == 2, "none",
+		:Electric >= 3, "paid by occupant"
+	)
+));
+
+dt << New Column("Electric Value", Numeric, "Coninuous", Formula(
+	IF(
+		:Electric < 3, 0,
+		:Electric >= 3, :Electric
+	)
+));
+
+
+//Convert Internet column into two columns
+//the first column determines if internet is available
+//the second column denotes how internet is aquired if possible
+dt << New Column("Internet Available", Character, Formula(
+	IF(
+		:Internet == 1, "yes",
+		:Internet == 2, "yes",
+		:Internet == 3, "no"
+	)
+));
+
+dt << New Column ("Internet Access Plan", Character, Formula(
+	IF(
+		:Internet == 1, "subscription",
+		:Internet == 2, "without subscription",
+		:Internet == 3, "no internet"
+	)
+));
+
+
+dt << New Column("Fiber Optic Available", Character, Formula(
+	IF(
+		:FiberOpt == 1, "yes",
+		:FiberOpt == 2, "no",
+		Is Missing(:FiberOpt), "N/A"
+	)
+));
+
+dt << New Column("House Heating Fuel", Character, Formula(
+	IF(
+		:HeatFuel == 1, "utility gas",
+		:HeatFuel == 2, "tank",
+		:HeatFuel == 3, "electricity",
+		:HeatFuel == 4, "fuel oil",
+		:HeatFuel == 5, "coal",
+		:HeatFuel == 6, "wood",
+		:HeatFuel == 7, "solar",
+		:HeatFuel == 8, "other",
+		:HeatFuel == 9, "none used",
+		Is Missing(:HeatFuel), "N/A"
+	)
+));
+
+dt << New Column("Build Year", Character, Formula(
+	IF(
+		:Built == 1, "Built 1939 and prior",
+		:Built == 2, "1940 - 1949",
+		:Built == 3, "1950 - 1959",
+		:Built == 4, "1960 - 1969",
+		:Built == 5, "1970 - 1979",
+		:Built == 6, "1980 - 1989",
+		:Built == 7, "1990 - 1999",
+		:Built == 8, "2000 - 2004",
+		:Built == 9, "2005",
+		:Built == 10, "2006",
+		:Built == 11, "2007",
+		:Built == 12, "2008",
+		:Built == 13, "2009",
+		:Built == 14, "2010",
+		:Built == 15, "2011",
+		:Built == 16, "2012",
+		:Built == 17, "2013",
+		:Built == 18, "2014",
+		:Built == 19, "2015",
+	)
+));
+
+dt << New Column("Tenure Enumeration", Character, Formula(
+	IF(
+		:Tenure == 1, "owned with mortgage",
+		:Tenure == 2, "owned no mortgage",
+		:Tenure == 3, "rented",
+		:Tenure == 4, "occupied without payment of rent",
+		Is Missing(:Tenure), "N/A"
+	)
+));
+
+dt << New Column("Second Loan", Character, Formula(
+	Choose(JuniorMtg, "second mortgage", "home equity loan", "no", "both")
+));
+
+dt << New Column("Marital Status", Character, Formula(
+	Choose(FamEmp, "Married", "Married", "Married", "Married", 
+	"Other Family", "Other Family", "Other Family", "Other Family")
+));
+
+dt << New Column("Male Present", Character, Formula(
+	Choose(FamEmp, "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "No", "No")
+));
+
+dt << New Column("Male in Work Force", Character, Formula(
+	Choose(FamEmp, "Yes", "Yes", "No", "No", "Yes", "No", "No", "No")
+));
+
+dt << New Column("Female Present", Character, Formula(
+	Choose(FamEmp, "Yes", "Yes", "Yes", "Yes", "No", "No", "Yes", "Yes")
+));
+
+dt << New Column("Female in Work Force", Character, Formula(
+	Choose(FamEmp, "Yes", "No", "Yes", "No", "No", "No", "Yes", "No")
+));
+
+dt << New Column("Household Language", Character, Formula(
+	Choose(Lang, "English Only", "Spanish", "Other Indo-Europen", "Asian and Pacific Island", "Other")
+));
+
+dt << New Column("Family Marital Status", Character, Formula(
+	Choose(Family, "Married", "Other Family", "Other Family", "Non Family", "Non Family", "Non Family", "Non Family")
+));
+
+dt << New Column("Family Head of Household", Character, Formula(
+	Choose(Family, "Male", "Male", "Female", "Male", "Male", "Female", "Female")
+));
+
+dt << New Column("Family Head of Household living alone", Charactger, Formula(
+	Choose(Family, "No", "Yes", "Yes", "Yes", "No", "Yes", "No")
+));
+
+dt << New Column("Head of Household Present", Character, Formula(
+	IF(
+		Is Missing(HHpresence), "N/A",
+		Choose(HHpresence, "Children Under 6", "Childern 6 -17", "Childern 0-6 nad 6-17", "no childern")
+	)
+));
+
+dt << New Column("Lenght of Occupancy", Character, Formula(
+	Choose(Move, "<= 12 months", "13-23 months", "2-4 years", "5-9 years", "10-19 years", "20-29 years", "30+ years")
+));
+
+dt << New Column("Persons under 18", Character, Formula(
+	Choose(Under18, "no", "yes")
+));
