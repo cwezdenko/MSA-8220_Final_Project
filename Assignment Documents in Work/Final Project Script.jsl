@@ -22,30 +22,15 @@ dt << New Column("Electric Value", Numeric, "Coninuous", Formula(
 	)
 ));
 
-
-
-
-dt << New Column("Marital Status", Character, Formula(
-	Choose(FamEmp, "Married", "Married", "Married", "Married", 
-	"Other Family", "Other Family", "Other Family", "Other Family")
-));
-
-dt << New Column("Male Present", Character, Formula(
-	Choose(FamEmp, "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "No", "No")
-));
-
-dt << New Column("Male in Work Force", Character, Formula(
-	Choose(FamEmp, "Yes", "Yes", "No", "No", "Yes", "No", "No", "No")
-));
-
-dt << New Column("Female Present", Character, Formula(
-	Choose(FamEmp, "Yes", "Yes", "Yes", "Yes", "No", "No", "Yes", "Yes")
-));
-
-dt << New Column("Female in Work Force", Character, Formula(
-	Choose(FamEmp, "Yes", "No", "Yes", "No", "No", "No", "Yes", "No")
-));
-
+//Converts Family into the following columns (Family Marital Status, Family Head of Household, Family Head of Household living alone)
+//Family Enumeration Values:
+//1=Married couple household, 
+//2=Other family household:male head of household (HH), no wife present, 
+//3=Other family household: female HH, no husband present, 
+//4=Nonfamily household:Male HH:Living alone, 
+//5=Nonfamily household: Male HH:Not living alone, 
+//6=Nonfamily household:Female HH:Living alone, 
+//7=Nonfamily household:Female HH: Not living alone
 
 dt << New Column("Family Marital Status", Character, Formula(
 	Choose(Family, "Married", "Other Family", "Other Family", "Non Family", "Non Family", "Non Family", "Non Family")
@@ -59,34 +44,173 @@ dt << New Column("Family Head of Household living alone", Charactger, Formula(
 	Choose(Family, "No", "Yes", "Yes", "Yes", "No", "Yes", "No")
 ));
 
-dt << New Column("Work Experience Head of House Hold", Character, Formula(
-	Choose(WkExp, "FT", "FT", "FT", "PT", "PT", "PT", "Did Not Work", "Did Not Work", "Did Not Work", "FT", "PT", "Did Not Work", "FT", "PT", "Did Not Work")
+//Correct NPerson column using Family andNchild
+dt << New Column("Npersons Corrected", Numeric, "Coninuous", Formula(
+	IF(
+		AND(Is Missing(:Npersons), :Family == 4), (1+:Nchild),
+		AND(Is Missing(:Npersons), :Family == 5), (2+:Nchild),
+		AND(Is Missing(:Npersons), :Family == 6), (1+:Nchild),
+		AND(Is Missing(:Npersons), :Family == 7), (2+:Nchild),
+		:Npersons
+	)
+
+));
+
+dt << New Column("Nperson Corrected and Binned", Character, Formula(
+	IF(
+		:Npersons Corrected == 1, "one",
+		:Npersons Corrected == 2, "two",
+		OR(:Npersons Corrected == 3, :Npersons Corrected == 4), "three or four",
+		"five or more" 
+	)
+));
+
+dt << New Column("Nchild Binned", Character, Formula(
+	IF(
+		:Nchild == 0, "Zero",
+		OR(:Nchild == 1, :Nchild == 2), "One or Two",
+		"Three or More"
+	)
+));
+
+//Converts FamEmp to the following columns (Marital Status, Male Present, Male in Work Force, Female Present, Female in Work Force)
+//FamEmp Enumeration Values:
+//1=Married-couple family: Husband and wife in labor force (LF), 
+//2=Married-couple family: Husband in labor force, wife.not in LF, 
+//3= Married-couple family: Husband not in LF,wife in LF, 
+//4 =Married-couple family: Neither husband nor wife in LF, 
+//5=Other family: Male householder, no wife present, in LF, 
+//6=Other family: Male householder, no wife present, not in LF, 
+//7=Other family: Female householder, no husband present, in LF, 
+//8=Other family: Female householder, no husband present, not in LF
+
+dt << New Column("Marital Status", Character, Formula(
+	IF(
+		Is Missing(:FamEmp), "Missing",
+		Choose(FamEmp, "Married", "Married", "Married", "Married","Other Family", "Other Family", "Other Family", "Other Family")
+	)
+));
+
+dt << New Column("Male Present", Character, Formula(
+	IF(
+		Is Missing(:FamEmp), "Missing",
+		Choose(FamEmp, "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "No", "No")
+	)
+));
+
+dt << New Column("Male in Work Force", Character, Formula(
+	IF(
+		Is Missing(:FamEmp), "Missing",
+		Choose(FamEmp, "Yes", "Yes", "No", "No", "Yes", "No", "No", "No")
+	)
+));
+
+dt << New Column("Female Present", Character, Formula(
+	IF(
+		Is Missing(:FamEmp), "Missing",
+		Choose(FamEmp, "Yes", "Yes", "Yes", "Yes", "No", "No", "Yes", "Yes")
+	)
+	
+));
+
+dt << New Column("Female in Work Force", Character, Formula(
+	IF(
+		Is Missing(:FamEmp), "Missing",
+		Choose(FamEmp, "Yes", "No", "Yes", "No", "No", "No", "Yes", "No")
+	)
+	
+));
+
+
+//Converts WkExp into the following columns (Work Experience of Head of House Hold, Head of Household Sex, Spouse Present, Spouse Work Experience)
+//WkExp Enumeration Values:
+//1 =HH and spouse worked FT,  
+//2 =HH worked FT; spouse worked < FT, 
+//3 =HH worked FT; spouse did not work, 
+//4 =HH worked < FT; spouse worked FT,
+//5 =HH worked < FT; spouse worked < FT, 
+//6 =HH worked < FT; spouse did not work, 
+//7 =HH did not work; spouse worked FT, 
+//8 =HH did not work; spouse worked < FT, 
+//9 =HH did not work; spouse did not work, 
+//10 =Male HH worked FT; no spouse present, 
+//11 =Male HH worked < FT; no spouse present, 
+//12=Male HH did not work; no spouse present, 
+//13 =Female HH worked FT; no spouse present, 
+//14 =Female HH worked < FT; no spouse present, 
+//15 =Female HH did not work; no spouse present
+
+dt << New Column("Work Experience Head of Household", Character, Formula(
+	IF(
+		Is Missing(:WkExp), "Missing",
+		Choose(WkExp, "FT", "FT", "FT", "PT", "PT", "PT", "Did Not Work", "Did Not Work", "Did Not Work", "FT", "PT", "Did Not Work", "FT", "PT", "Did Not Work")
+	)
 ));
 
 dt << New Column("Head of Household Sex", Character, Formula(
-	Choose(WkExp, "UNK", "UNK", "UNK", "UNK", "UNK", "UNK", "UNK", "UNK", "UNK", "Male", "Male", "Male", "Female", "Female", "Female")
+	IF(
+		Is Missing(:WkExp), "Missing",
+		Choose(WkExp, "UNK", "UNK", "UNK", "UNK", "UNK", "UNK", "UNK", "UNK", "UNK", "Male", "Male", "Male", "Female", "Female", "Female")
+	)
 ));
 
 dt << New Column("Spouse Present", Character, Formula(
-	Choose(WkExp, "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "No", "No", "No", "No", "No", "No")
+	IF(
+		Is Missing(:WkExp), "Missing",
+		Choose(WkExp, "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "Yes", "No", "No", "No", "No", "No", "No")
+	)
 ));
 
-dt << New Column("Spouse Work Experiance", Character, Formula(
-	Choose(WkExp, "FT", "PT", "Did Not Work", "FT", "PT", "Did Not Work", "FT", "PT", "Did Not Work", "Did Not Work", "Did Not Work", "Did Not Work", "Did Not Work", "Did Not Work", "Did Not Work")
+dt << New Column("Spouse Work Experience", Character, Formula(
+	IF(
+		Is Missing(:WkExp), "Missing",
+		Choose(WkExp, "FT", "PT", "Did Not Work", "FT", "PT", "Did Not Work", "FT", "PT", "Did Not Work", "Did Not Work", "Did Not Work", "Did Not Work", "Did Not Work", "Did Not Work", "Did Not Work")
+	)
 ));
+//Converst WkStatus into the following columns (Male in Labor Force, Male Employment status, Female in Labor Force, Female Employment Status)
+//1 =Husband and wife both in LF, both employed or in Armed Forces, 
+//2 =Husband and wife both in LF, husband employed or in Armed Forces, wife unemployed, 
+//3 =Husband in LF and wife not in LF, husband employed or in Armed Forces,
+//4 =Husband and wife both in LF, husband unemployed, wife employed or in Armed Forces, 
+//5 =Husband and wife both in LF, husband unemployed, wife unemployed, 
+//6 =Husband in LF, husband unemployed, wife not in LF, 
+//7 =Husband not in LF, wife in LF, wife employed or in Armed Forces, 
+//8 =Husband not in LF, wife in LF, wife unemployed, 
+//9 =Neither husband nor wife in LF, 
+//10 =Male HH with no wife present, HH in LF, employed or in Armed Forces, 
+//11 =Male HH with no wife present, HH in LF and unemployed, 
+//12 =Male HH with no wife present, HH not in LF, 
+//13 =Female HH with no husband present, HH in LF, employed or in Armed Forces, 
+//14 =Female HH with no husband present, HH in LF and unemployed, 
+//15 =Female HH with no husband present, HH not in LF)
+
+
 
 dt << New Column("Male in Labor Force", Character, Formula(
-	Choose(WkStatus, "LF", "LF", "LF", "LF", "LF", "LF", "Not in LF", "Not in LF", "Not in LF", "LF", "LF", "Not in LF", "Not Present", "Not Present", "Not Present")
+	IF(
+		Is Missing(:WkStatus), "Missing",
+		Choose(WkStatus, "LF", "LF", "LF", "LF", "LF", "LF", "Not in LF", "Not in LF", "Not in LF", "LF", "LF", "Not in LF", "Not Present", "Not Present", "Not Present")
+	)
 ));
 
-dt << New Column("Male employment status", Character, Formula(
-	Choose(WkStatus, "Armed Forces", "Armed Forces", "Armed Forces", "Unemployed", "Unemployed", "Unemployed", "Unemployed", "Unemployed", "Unemployed", "Armed Forces", "Unemployed", "Unemployed", "Not Present", "Not Present", "Not Present")
+dt << New Column("Male Employment Status", Character, Formula(
+	IF(
+		Is Missing(:WkStatus), "Missing",
+		Choose(WkStatus, "Armed Forces", "Armed Forces", "Armed Forces", "Unemployed", "Unemployed", "Unemployed", "Unemployed", "Unemployed", "Unemployed", "Armed Forces", "Unemployed", "Unemployed", "Not Present", "Not Present", "Not Present")
+	)
 ));
 
 dt << New Column("Female in Labor Force", Character, Formula(
-	Choose(WkStatus, "LF", "LF", "Not in LF", "LF", "LF", "Not in LF", "LF", "LF", "Not in LF", "Not Present", "Not Present", "Not Present", "LF", "LF", "Not in LF")
+	IF(
+		Is Missing(:WkStatus), "Missing",
+		Choose(WkStatus, "LF", "LF", "Not in LF", "LF", "LF", "Not in LF", "LF", "LF", "Not in LF", "Not Present", "Not Present", "Not Present", "LF", "LF", "Not in LF")
+	)
 ));
 
-dt << New Column("Female employment status", Character, Formula(
-	Choose(WkStatus, "Armed Forces", "Unemployed", "Unemployed", "Armed Forces", "Unemployed", "Unemployed", "Armed Forces", "Unemployed", "Unemployed", "Not Present", "Not Present", "Not Present", "Armed Forces", "Unemployed", "Unemployed")
+dt << New Column("Female Employment Status", Character, Formula(
+	IF(
+		Is Missing(:WkStatus), "Missing",
+		Choose(WkStatus, "Armed Forces", "Unemployed", "Unemployed", "Armed Forces", "Unemployed", "Unemployed", "Armed Forces", "Unemployed", "Unemployed", "Not Present", "Not Present", "Not Present", "Armed Forces", "Unemployed", "Unemployed")
+	)
 ));
+

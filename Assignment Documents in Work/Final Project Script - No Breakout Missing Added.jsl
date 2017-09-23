@@ -1,0 +1,39 @@
+//Import fuctions to allows for quick ingestion and changes to the data.  
+//Remember to provided the path to cali1.xlsx on the local machine.
+
+dt = Open("D:\chris\Documents\GitHub\MSA-8220_Final_Project\Assignment Documents in Work\Project Initial Data Set - cali1 - 09182017.jmp");
+
+
+
+//Correct NPerson column using Family andNchild
+dt << New Column("Npersons Corrected", Numeric, "Coninuous", Formula(
+	IF(
+		AND(Is Missing(:Npersons), :Family == 4), (1+:Nchild),
+		AND(Is Missing(:Npersons), :Family == 5), (2+:Nchild),
+		AND(Is Missing(:Npersons), :Family == 6), (1+:Nchild),
+		AND(Is Missing(:Npersons), :Family == 7), (2+:Nchild),
+		:Npersons
+	)
+
+));
+
+dt << New Column("Nperson Corrected and Binned", Character, Formula(
+	IF(
+		:Npersons Corrected == 1, "one",
+		:Npersons Corrected == 2, "two",
+		OR(:Npersons Corrected == 3, :Npersons Corrected == 4), "three or four",
+		"five or more" 
+	)
+));
+
+dt << New Column("Nchild Binned", Character, Formula(
+	IF(
+		:Nchild == 0, "Zero",
+		OR(:Nchild == 1, :Nchild == 2), "One or Two",
+		"Three or More"
+	)
+));
+
+
+
+
