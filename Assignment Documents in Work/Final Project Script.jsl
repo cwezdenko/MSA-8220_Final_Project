@@ -15,12 +15,41 @@ dt << New Column("Electric Enumeration", Character, Formula(
 	)
 ));
 
-dt << New Column("Electric Value", Numeric, "Coninuous", Formula(
+dt << New Column("Electric Value", Numeric, Continuous, Formula(
 	IF(
 		:Electric < 3, 0,
 		:Electric >= 3, :Electric
 	)
 ));
+
+dt << New Column("FiberOpt_Corrected", Numeric, Continuous, Formula(
+	IF(
+		Is Missing(:FiberOpt), 2,
+		:FiberOpt
+	)
+));
+
+dt << New Column("BroadBND_Corrected", Numeric, Continuous, Formula(
+	IF(
+		Is Missing(:BroadBND), 2,
+		:BroadBND
+	)
+));
+
+dt << New Column("JuniorMtg_Corrected", Character, Formula(
+	IF(
+		Is Missing(:JuniorMtg), "Missing",
+		Char(:JuniorMtg)
+	)
+));
+
+dt << New Column("Workers_Corrected", Character, Formula(
+	IF(
+		Is Missing(:Workers), "Missing",
+		Char(:Workers)
+	)
+));
+
 
 //Converts Family into the following columns (Family Marital Status, Family Head of Household, Family Head of Household living alone)
 //Family Enumeration Values:
@@ -45,12 +74,12 @@ dt << New Column("Family Head of Household living alone", Charactger, Formula(
 ));
 
 //Correct NPerson column using Family andNchild
-dt << New Column("Npersons Corrected", Numeric, "Coninuous", Formula(
+dt << New Column("Npersons Corrected", Numeric, Continuous, Formula(
 	IF(
-		AND(Is Missing(:Npersons), :Family == 4), (1+:Nchild),
-		AND(Is Missing(:Npersons), :Family == 5), (2+:Nchild),
-		AND(Is Missing(:Npersons), :Family == 6), (1+:Nchild),
-		AND(Is Missing(:Npersons), :Family == 7), (2+:Nchild),
+		AND(OR(Is Missing(:Npersons), :Npersons == "Missing"), :Family == 4), (1+:Nchild),
+		AND(OR(Is Missing(:Npersons), :Npersons == "Missing"), :Family == 5), (2+:Nchild),
+		AND(OR(Is Missing(:Npersons), :Npersons == "Missing"), :Family == 6), (1+:Nchild),
+		AND(OR(Is Missing(:Npersons), :Npersons == "Missing"), :Family == 7), (2+:Nchild),
 		:Npersons
 	)
 
@@ -83,6 +112,13 @@ dt << New Column("Nchild Binned", Character, Formula(
 //6=Other family: Male householder, no wife present, not in LF, 
 //7=Other family: Female householder, no husband present, in LF, 
 //8=Other family: Female householder, no husband present, not in LF
+
+dt << New Column("FamEmp_Corrected", Character, Formula(
+	IF(
+		Is Missing(:FamEmp), "Missing",
+		Char(:FamEmp)
+	)
+));
 
 dt << New Column("Marital Status", Character, Formula(
 	IF(
@@ -140,6 +176,13 @@ dt << New Column("Female in Work Force", Character, Formula(
 //14 =Female HH worked < FT; no spouse present, 
 //15 =Female HH did not work; no spouse present
 
+dt << New Column("WkExp_Corrected", Character, Formula(
+	IF(
+		Is Missing(:WkExp), "Missing",
+		Char(:WkExp)
+	)
+));
+
 dt << New Column("Work Experience Head of Household", Character, Formula(
 	IF(
 		Is Missing(:WkExp), "Missing",
@@ -184,6 +227,12 @@ dt << New Column("Spouse Work Experience", Character, Formula(
 //14 =Female HH with no husband present, HH in LF and unemployed, 
 //15 =Female HH with no husband present, HH not in LF)
 
+dt << New Column("WkStatus_Corrected", Character, Formula(
+	IF(
+		Is Missing(:WkStatus), "Missing",
+		Char(:WkStatus)
+	)
+));
 
 
 dt << New Column("Male in Labor Force", Character, Formula(
