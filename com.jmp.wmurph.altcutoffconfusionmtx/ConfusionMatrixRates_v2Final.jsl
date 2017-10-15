@@ -1,0 +1,523 @@
+/****************************************************************************************************
+     JMP Add-In:  Alternate Cut-off Confusion Matrix
+     10/2012 Original Version
+     09/2014 V2: Added support for JMP 11 and 12
+				 Added source predictor information in the report
+				 Corrected link to Help in Confusion Matrix output
+                 Bug fixes
+      
+     Copyright (c) 2014 by SAS Institute Inc., Cary, NC 27513, USA. All rights reserved.
+     
+     Purpose:
+     The Alternate Cut-off Confusion Matrix JMP Add-In is designed to allow the user to specify a 
+     cut-off value or a range of values to generate a new Confusion Matrix for a binary response 
+     variable.  Confusion Rates are also generated.
+     
+     Statistical Design:
+     Sue Walsh (SAS Institute)
+     
+     Script Author:
+     Wendy Murphrey (SAS Institute)
+     
+     Contact:
+     Wendy Murphrey, wendy.murphrey@sas.com
+     
+     Usage:
+     See detailed steps in the accompanying Help file. 
+     
+     Future:
+     No future enhancements planned at this time.  
+****************************************************************************************************/   
+Names Default To Here( 1 );
+If( N Table() == 0,
+	dt = Open(),
+	dt = Current Data Table()
+);
+nc = N Col( dt );
+lbWidth = 150;
+vcol = Empty();
+Status Msg( "" );
+
+/* Recall Button:
+    - Create namespace for Recall button.
+    - Capture values for Target, Predicted Value, Validation, and 
+      Cut-off or Range with Increments. 
+*/
+If( !Namespace Exists( "com.jmp.wmurph.altcutoff.recallNS" ),
+	New Namespace( "com.jmp.wmurph.altcutoff.recallNS" );
+	com.jmp.wmurph.altcutoff.recallNS:roleSettings = Expr(
+		com.jmp.wmurph.altcutoff.recallNS:tcolSet = colListTgt << Get Items;
+		com.jmp.wmurph.altcutoff.recallNS:pcolSet = colListPV << Get Items;
+		com.jmp.wmurph.altcutoff.recallNS:vcolSet = colListv << Get Items;
+		com.jmp.wmurph.altcutoff.recallNS:cbSet = cb << Get;
+		If( com.jmp.wmurph.altcutoff.recallNS:cbSet == 1, //specify range
+			com.jmp.wmurph.altcutoff.recallNS:rangeStart = rStart << Get;
+			com.jmp.wmurph.altcutoff.recallNS:rangeEnd = rEnd << Get;
+			com.jmp.wmurph.altcutoff.recallNS:rangeIncr = rIncr << Get;
+		,
+			com.jmp.wmurph.altcutoff.recallNS:cutoff = neb << Get
+		);
+	);
+);
+
+/* Target Missing Value Check:
+    - Check for Missing Values. 
+    - Exclude rows that have missing values. 
+*/
+TmissingCheck = Expr(
+	Summarize( a = By( tcol ) );
+	If( Contains( a, "." ) | Contains( a, "" ),
+		Caption( "ALERT: \!NTarget contains missing values. Rows with missing target values will be excluded." );
+		missingRows = dt << Get Rows Where( Is Missing( tcol[Row()] ) );
+		For( mr = 1, mr <= N Rows( missingRows ), mr++,
+			If( Excluded( Row State( missingRows[mr] ) ) == 0,
+				Excluded( Row State( missingRows[mr] ) ) = 1
+			)
+		);
+		If( Contains( a, "." ),
+			Remove From( a, Contains( a, "." ), 1 ),
+			Remove From( a, Contains( a, "" ), 1 )
+		);
+	);
+);
+
+/* Validation Missing Value Check:
+    - Check for Missing Values. 
+    - Exclude rows that have missing values. 
+    - Disallow validation columns that have more than 3 non-missing levels.
+*/
+VmissingCheck = Expr(
+	Summarize( vmiss = By( vcol ) );
+	If(
+		(Contains( vmiss, "." ) & N Items( vmiss ) - 1 > 3) | (!Contains( vmiss, "." ) & N Items( vmiss ) > 3),
+			colListV << Remove All;
+			Caption( "ALERT:  \!NValidation column may have no more than 3 non-missing levels." );
+			Throw();,
+		Contains( vmiss, "." ),
+			Caption(
+				"ALERT: \!NValidation column contains \!Nmissing values. \!NRows with missing validation values will be excluded."
+			);
+			missingRows = dt << Get Rows Where( Is Missing( vcol[Row()] ) );
+			For( mr = 1, mr <= N Rows( missingRows ), mr++,
+				If( Excluded( Row State( missingRows[mr] ) ) == 0,
+					Excluded( Row State( missingRows[mr] ) ) = 1
+				)
+			);
+			If( Contains( vmiss, "." ),
+				Remove From( vmiss, Contains( vmiss, "." ), 1 )
+			);
+	);
+	nuniq = N Items( vmiss );
+);
+
+
+/* NOTES: 
+Prediction column name examples:
+  //Partition
+    pvName = "Prob(sex==F)";
+    pvcol = Column("Prob(sex==F)");
+  //Neural
+    pvName = "Probability( sex=F )";
+    pvcol = Column("Probability( sex=F )");
+  //Fit Model
+    pvName = "Prob[F]";
+    pvcol = Column("Prob[F]");
+
+Example values passed to cMtxFunction as tcol, pvcol, cutoff, vcol:
+  tgt = Column("sex");
+  pv = Column("Prob(sex==F)");
+  cu = 0.5;
+  vc = Column("V2");
+*/
+
+cMtxFunction = Function( {tgt, pv, cu, vc = .},
+	vOrder = Empty();
+	/* Extract the predicted value from the column name. */
+	pvName = pv << Get Name;
+	If( Contains( pvName, "[" ),
+		pvTrue = Word( 2, Char( pv ), " []=)" ),
+		pvTrue = Trim( Substr( Word( 2, pvname, "=)" ), 1, Length( Word( 2, pvname, "=)" ) ) ), both )
+	);
+	pvFalse = Remove( a, Contains( a, pvTrue ) );
+	vl = V List Box();
+	
+	/* Add Predicted column to be used in Tabulate. */
+	Try( dt << Delete Column( Column( "Predicted" ) ) );
+	Wait( 0 );
+	Eval(
+		Eval Expr(
+			dt << New Column( "Predicted",
+				Character,
+				Formula( If( Expr( pvcol )[] <= Expr( cutoff ), Expr( pvFalse[1] ), Expr( pvTrue ) ) )
+			)
+		)
+	);
+	dt << Run Formulas;
+		/* Order Target */
+	vOrder = tgt << Get Property( "Value Ordering" );
+	Eval( Eval Expr( tgt << Set Property( "Value Ordering", Expr( Sort Ascending( a ) ) ) ) );
+
+	/* Get Predictor source */
+	responseProbSource = pv << Get Property( "Response Probability" );
+	rpTgt = Char( Arg( responseProbSource, 1 ) );
+	rpCreate = Arg( responseProbSource[3], 1 );
+
+	If( Is Empty( vcol ), 
+		/* If NO Validation Column: 
+            - Create Confusion Matrix and Confusion Rate Tabulate reports in a custom OutlineBox.  
+        */
+		t1 = dt << Tabulate(
+			Show Control Panel( 0 ),
+			Add Table( Row Table( Grouping Columns( tcol ) ), Column Table( Grouping Columns( Column( "Predicted" ) ) ) ),
+			Invisible
+		);
+		t2 = dt << Tabulate(
+			Show Control Panel( 0 ),
+			Set Format( Uniform Format( 10, 2, Percent ) ),
+			Add Table(
+				Column Table( Grouping Columns( Column( "Predicted" ) ), Statistics( Row % ) ),
+				Row Table( Grouping Columns( tcol ) )
+			),
+			Invisible
+		);
+		
+		tabOB = Outline Box( "Confusion Matrix for Cut-off = " || Char( cu ),
+			{"Help", Open( "$ADDIN_HOME(com.jmp.wmurph.altcutoffconfusionmtx)\Alternate Cut_Final_v2.pdf" )},
+			V List Box(
+				Outline Box( "Target: " || rpTgt || "\!nPredictor: " || rpCreate, Report( t1 )[Box( 1 )] ),
+				crOB = Outline Box( "Confusion Rates" || " (" ||Char(cu) || ")", Report( t2 )[Box( 1 )] )
+			)
+		);
+		crOB << outlinecloseorientation( "Horizontal" ) << Close( 1 );
+		vl << Append( tabOB );
+		t1 << Close Window;
+		t2 << Close Window;
+	, 
+		/* If Validation Column:
+		    - Create a temporary column to hold the Training, Validation, and Test values.
+            - Create Confusion Matrix and Confusion Rate Tabulate reports in a custom OutlineBox. 
+		*/
+		Try( dt << Delete Column( "Modeling Data" ) );
+		
+		tempVcol = Eval( Eval Expr( dt << New Column( "Modeling Data", Numeric, Formula( Expr( vcol )[Row()] ) ) ) );
+		dt << Run Formulas;
+		Summarize( uniqLevs = By( :Modeling Data ) ); 
+
+		If( Contains( uniqLevs, "." ),
+			Remove From( uniqLevs, Contains( uniqLevs, "." ) )
+		);
+		For( vlab = 1, vlab <= N Items( uniqLevs ), vlab++,
+			uniqLevs[vlab] = Num( uniqLevs[vlab] )
+		);
+		uniqM = Matrix( uniqLevs );
+		r = Rank( uniqM );
+		uniqSM = uniqM[r];
+		valLabel = {};
+		labelList = {"Training", "Validation", "Test"};
+		For( vlab2 = 1, vlab2 <= nuniq, vlab2++,
+			vlExpr = Eval Expr( Expr( uniqSM[vlab2] ) = Expr( labelList[vlab2] ) );
+			Insert Into( valLabel, Name Expr( vlExpr ) );
+		);
+		tempVcol << Value Labels( valLabel );
+		tv1 = dt << Tabulate(
+			Show Control Panel( 0 ),
+			Add Table( Column Table( Grouping Columns( tempVcol, Column( "Predicted" ) ) ), Row Table( Grouping Columns( tcol ) ) ),
+			Invisible
+		);
+		crVhlist = H List Box();
+		For( crV = 1, crV <= nuniq, crV++,
+			dt << Clear Column Selection;
+			vRowSubset = dt << Get Rows Where( tempVcol[Row()] == uniqM[crV] );
+			crVsubdt = dt << Subset( Selected Rows( 0 ), Rows( vRowSubset ), Invisible );
+
+			tv2 = crVsubdt << Tabulate(
+				Show Control Panel( 0 ),
+				Set Format( Uniform Format( 10, 2, Percent ) ),
+				Add Table(
+					Column Table( Grouping Columns( Column( "Predicted" ) ), Statistics( Row % ) ),
+					Row Table( Grouping Columns( Eval( tcol ) ) )
+				),
+				Invisible
+			); 
+				
+			crVhlist << Append( crOB = Outline Box( "Confusion Rates: \!n" || labelList[crV] || " (" ||Char(cu) || ")", Report( tv2 )[Box( 1 )] ) );
+			crOB << outlinecloseorientation( "Horizontal" ) << Close( 1 );
+			tv2 << Close Window;
+			Close( crVsubdt, No Save );
+			Wait( 0 );
+		);
+
+		tabOB = Outline Box( "Confusion Matrix for Cut-off = " || Char( cu ),
+			{"Help", Open( "$ADDIN_HOME(com.jmp.wmurph.altcutoffconfusionmtx)\Alternate Cut_Final_v2.pdf" )},
+			V List Box( Outline Box( "Target: " || rpTgt || "\!nPredictor: " || rpCreate, Report( tv1 )[Box( 1 )] ), crVhlist )
+		);
+		vl << Append( tabOB );
+		tv1 << Close Window;
+		dt << Delete Column( tempVcol );
+	);
+	/* Append Tabulate containers to report window and bring to front. */
+	If( Is Empty( vlb ),
+		cmatwin = New Window( "Confusion Matrix", vlb = V List Box( vl ) ),
+		vlb << Append( vl );
+		cmatwin << Bring Window to Front;
+	);
+		/* Reset Value Ordering Property on tgt */
+	If( !Is Empty( vOrder ),
+		Eval( Eval Expr( tgt << Set Property( "Value Ordering", Expr( vOrder ) ) ) ),
+		tgt << Delete Property( "Value Ordering" )
+	);
+
+);
+/*
+combinedTable = Expr(
+	obList = (cmatWin << Xpath( "//OutlineBox" ));
+	For( w = 2, w <= N Items( obList ), w += 3,
+		wTab = obList[w] << Get Scriptable Object;
+		rptCutoff = Num( Word( 2, obList[w - 1] << Get Title, "=" ) );
+		cmtx = wTab << Make into Data Table( Invisible( 0 ) );
+		col = cmtx << New Column( "Cut-off", Numeric, Set Each Value( rptCutoff ) );
+		col << Set Selected( 1 );
+		cmtx << Move Selected Columns( To first );
+	
+		rTab = obList[w + 1] << Get Scriptable Object;
+		rateTble = rTab << Make Into Data Table( Invisible( 0 ) );
+		cmtx << Update( With( rateTble ), Match Columns( :sex = :sex ) );
+	
+		If( w == 2,
+			main = cmtx;
+			main << Set Name( "Alternate Cutoff Values" );
+		,
+			main << Concatenate( cmtx, Append to First Table );
+			Close( cmtx, No Save );
+		
+		);
+		Close( rateTble, No Save );
+	);
+	main << Bring Window to Front;
+);
+*/
+/* User Interface */
+nw = New Window( "Alternate Cut-off Confusion Matrix",
+	Border Box( Left( 3 ), top( 2 ),
+		V List Box(
+			Text Box( "Model Confusion Matrix for Alternate Cut-off Values" ),
+			H List Box(
+				V List Box( Panel Box( "Select Columns", colList = Col List Box( All, Width( lbWidth ), Nlines( Min( nc, 10 ) ) ) ) ),
+				V List Box(
+					Panel Box( "Cast Selected Columns and Specify Cut-off",
+						lb = Lineup Box( N Col( 2 ), Spacing( 3 ),
+							Button Box( "Target (or Y, Response)",
+								If( N Items( colListTgt << Get Items ) == 0,
+									tcol = Column( (colList << Get Selected)[1] );
+									If( (tcol << GetModelingType) == "Nominal",
+										colListTgt << Append( tcol ),
+										Caption( "ALERT: \!NColumn must have a nominal modeling type" )
+									);
+								,
+									Caption( "ALERT: \!NMaximum of 1 column allowed" )
+								);
+								TmissingCheck;
+								
+								If( N Items( a ) > 2,
+									Caption( "ALERT: \!NTarget must have only two levels" );
+									colListTgt << Remove All;
+									Throw();
+								);
+							),
+							colListTgt = Col List Box( Width( lbWidth ), Nlines( Min( nc, 3 ) ), MaxItems( 1 ), MinItems( 1 ) ),
+							Button Box( "Predicted Value",
+								If( N Items( colListPV << Get Items ) == 0,
+									pvcol = Column( (colList << Get Selected)[1] );
+								
+									If( (pvcol << Get Modeling Type) == "Continuous",
+										colListPV << Append( pvcol ),
+										Caption( "ALERT: \!NColumn must have a continuous modeling type" )
+									);
+								,
+									Caption( "ALERT: \!NMaximum of 1 column allowed" )
+								)
+							),
+							colListPV = Col List Box(
+								Width( lbWidth ),
+								Nlines( Min( nc, 3 ) ),
+								MaxItems( 1 ),
+								MinItems( 1 ),
+								Numeric
+							), 
+
+							Button Box( "Validation",
+								If( N Items( colListV << Get Items ) == 0,
+									vcol = Column( (colList << Get Selected)[1] );
+									If( JMP Product Name() == "Standard",
+										Caption( "ALERT: \!NValidation is only available in JMP Pro" ),
+										colListV << Append( vcol );
+										VmissingCheck;
+									);
+								,
+									Caption( "ALERT: \!NMaximum of 1 column allowed" )
+								)
+							),
+							colListV = Col List Box( Width( lbWidth ), Nlines( Min( nc, 2 ) ), MaxItems( 1 ), Numeric ),
+							Text Box( "Alternate Cut-off Value:", Justify Text( right ) ),
+							neb = Number Edit Box( 0.5 ),
+							Text Box( "" ),
+							cbvl = V List Box(
+								cb = Check Box(
+									"Specify a range and increment", 
+									
+									cbSet = cb << Get;
+									Try( lub2 << Delete );
+									If( cbSet == 1,
+										cutoff = .;
+										neb << Enable( 0 );
+										cbvl << Append(
+											lub2 = Lineup Box( N Col( 2 ), Spacing( 3 ),
+												Text Box( "Range Start: ", Justify Text( right ) ),
+												rStart = Number Edit Box( 0.4 ),
+												Text Box( "Range End: ", Justify Text( right ) ),
+												rEnd = Number Edit Box( 0.6 ),
+												Text Box( "Increment: ", Justify Text( right ) ),
+												rIncr = Number Edit Box( 0.1 )
+											)
+										);
+									,
+										neb << Enable( 1 )
+									);
+								)
+							)
+						)
+					),
+					Text Box( "" )
+				),
+				V List Box(
+					Panel Box( "Action",
+						Button Box( "OK",
+							com.jmp.wmurph.altcutoff.recallNS:roleSettings;
+							If( N Items( colListv << Get Items ) == 0,
+								vcol = Empty()
+							);
+							If( N Items( colListTgt << Get Items ) == 0,
+								Caption( "ALERT: \!NMust specify a Target" );
+								Throw();
+							);
+							If( N Items( colListPV << Get Items ) == 0,
+								Caption( "ALERT: \!NMust specify a Predicted Value" );
+								Throw();
+							);
+							cbSet = cb << Get;
+							If( cbSet == 1, //specify range
+								rangeStart = rStart << Get;
+								rangeEnd = rEnd << Get;
+								rangeIncr = rIncr << Get;
+								If( rangeStart < 0 | rangeEnd > 1,
+									Caption( "ALERT: \!NRange must be between 0 and 1" );
+									Throw();
+								);
+								If( rangeStart > rangeEnd,
+									Caption( "ALERT: \!NRange start exceeds range end" );
+									Throw();
+								);
+								If( rangeEnd < rangeStart,
+									Caption( "ALERT: \!NRange end is less than range start" );
+									Throw();
+								);
+								nLoop = Round( (rangeEnd - rangeStart) / rangeIncr, 0 );
+								
+								If( nLoop == 0, nLoop = 1 );
+								If( Round( (rangeIncr * (nLoop)) + rangeStart, 5 ) > rangeEnd,
+									Caption( "ALERT: \!NRange start plus increments exceeds range end" );
+									Throw();
+								);
+								For( rl = 1, rl <= nLoop + 1, rl++,
+									If( rl == 1,
+										cutoff = rangeStart,
+										cutoff += rangeIncr;
+										
+									);
+									
+									cMtxFunction( tcol, pvcol, cutoff, vcol );
+								);
+							);
+							If( cbSet == 0, //specify cutoff
+								cutoff = neb << Get;
+								If( 0 <= cutoff <= 1,
+									cMtxFunction( tcol, pvcol, cutoff, vcol ),
+									Caption( "ALERT: \!NCut-off value must be between 0 and 1" );
+									neb << Set( 0.5 );
+								);
+							);
+						),
+						Button Box( "Cancel", nw << Close Window ),
+						Text Box( "" ),
+						Button Box( "Reset",
+							Try(
+								colListTgt << Remove All;
+								colListPV << Remove All;
+								colListv << Remove All;
+								neb << Enable( 1 );
+								neb << Set( 0.5 );
+								cb << Set( 1, 0 );
+								lub2 << Delete;
+							)
+						),
+						Button Box( "Remove",
+							colListTgt << RemoveSelected;
+							colListPV << RemoveSelected;
+							colListv << RemoveSelected;
+						),
+						Button Box( "Recall",
+							Try(
+								tcol = Column( com.jmp.wmurph.altcutoff.recallNS:tcolSet[1] );
+								colListTgt << Append( tcol );
+								TmissingCheck;
+							);
+							Try(
+								pvcol = Column( com.jmp.wmurph.altcutoff.recallNS:pcolSet[1] );
+								colListPV << Append( pvcol );
+							);
+							Try(
+								vcol = Column( com.jmp.wmurph.altcutoff.recallNS:vcolSet[1] );
+								colListv << Append( vcol );
+								VmissingCheck;
+							);
+							Try(
+								cb << Set( 1, com.jmp.wmurph.altcutoff.recallNS:cbSet );
+								If( com.jmp.wmurph.altcutoff.recallNS:cbSet == 1, //specify range
+									neb << Enable( 0 );
+									cutoff = .;
+									Try(lub2 << Delete);
+									cbvl << Append(
+										lub2 = Lineup Box( N Col( 2 ), Spacing( 3 ),
+											Text Box( "Range Start: ", Justify Text( right ) ),
+											rStart = Number Edit Box( com.jmp.wmurph.altcutoff.recallNS:rangeStart ),
+											Text Box( "Range End: ", Justify Text( right ) ),
+											rEnd = Number Edit Box( com.jmp.wmurph.altcutoff.recallNS:rangeEnd ),
+											Text Box( "Increment: ", Justify Text( right ) ),
+											rIncr = Number Edit Box( com.jmp.wmurph.altcutoff.recallNS:rangeIncr )
+										)
+									);
+								,
+									neb << Enable( 1 );
+									neb << Set( com.jmp.wmurph.altcutoff.recallNS:cutoff );
+								);
+								
+							);
+						),
+						Text Box( "" ),
+						Button Box( "Help", Open( "$ADDIN_HOME(com.jmp.wmurph.altcutoffconfusionmtx)\Alternate Cut_Final_v2.pdf" ) )
+					)
+				)
+			)
+		)
+	)
+);
+
+/****************************************************************************************************
+SAS INSTITUTE INC. IS PROVIDING YOU WITH THE COMPUTER SOFTWARE CODE INCLUDED WITH THIS AGREEMENT ("CODE") ON AN "AS IS" BASIS, AND AUTHORIZES YOU TO USE THE CODE SUBJECT TO THE TERMS HEREOF.  BY USING THE CODE, YOU AGREE TO THESE TERMS.  YOUR USE OF THE CODE IS AT YOUR OWN RISK.  SAS INSTITUTE INC. MAKES NO REPRESENTATION OR WARRANTY, EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NONINFRINGEMENT AND TITLE, WITH RESPECT TO THE CODE. 
+  
+The Code is intended to be used solely as part of a product ("Software") you currently have licensed from SAS Institute Inc. or one of its subsidiaries or authorized agents ("SAS"). The Code is designed to either correct an error in the Software or to add functionality to the Software, but has not necessarily been tested.  Accordingly, SAS makes no representation or warranty that the Code will operate error-free.  SAS is under no obligation to maintain or support the Code. 
+  
+Neither SAS nor its licensors shall be liable to you or any third party for any general, special, direct, indirect, consequential, incidental or other damages whatsoever arising out of or related to your use or inability to use the Code, even if SAS has been advised of the possibility of such damages. 
+  
+Except as otherwise provided above, the Code is governed by the same agreement that governs the Software.  If you do not have an existing agreement with SAS governing the Software, you may not use the Code. 
+****************************************************************************************************/
